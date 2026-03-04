@@ -14,7 +14,10 @@ mermaid:
 
 # Anonymize when submitting
 authors:
-    - name: Anonymous
+  - name: Pierre-André Noël
+    url: "https://scholar.google.com/citations?user=FxU9cG0AAAAJ&sortby=pubdate"
+    affiliations:
+      name: ServiceNow AI Research
 
 # must be the exact same name as your blogpost
 bibliography: 2026-04-27-destruction.bib
@@ -49,6 +52,16 @@ _styles: >
 This blogpost is composed of two main sections, tied together by their unusual information-theoretic viewpoint.
 [The Thesis](#the-thesis) is an opinion/perspective/speculative piece on diffusion models.
 [The Tutorial](#the-tutorial) is a diagrammatic presentation of diffusion models.
+
+**For diffusion experts.**
+[The Thesis](#the-thesis) is meant to stand alone, and it is where you will find the bulk of this blogpost's novel ideas.
+Nonetheless, I encourage you to at least browse [The Tutorial](#the-tutorial): it takes an unusual perspective that may interest you, and it introduces a new kind of probabilistic graphical model -- which I propose to call *generative commutative diagrams* -- that personally helped me wrap my head around numerous subtleties.
+
+**For non-experts.**
+I encourage you to read through [The Thesis](#the-thesis) in a cursory first-pass, just to absorb its general sense, then immediately proceed with [The Tutorial](#the-tutorial).
+This should prepare you to circle back to [The Thesis](#the-thesis), this time paying more attention to passages that give you pause.
+
+Finally, I wish to remind all readers that **this blogpost contains speculations**: I've taken special care toward clearly marking them as such, and I hope that this callout helps placing you in the right mindset.
 
 
 # The Thesis
@@ -86,13 +99,14 @@ In *Diffusion Language Models are Super Data Learners*, Ni *et al.*<d-cite key="
 
 > when unique data is limited, diffusion language models (DLMs) consistently surpass autoregressive (AR) models by training for more epochs. The crossover shifts later with more or higher-quality data, earlier with larger models, and persists across dense and sparse architectures. We attribute the gains to three compounding factors: (1) any-order modeling, (2) super-dense compute from iterative bidirectional denoising, and (3) built-in Monte Carlo augmentation [...]
 
-I think that this makes a lot of sense, and that **this phenomenon is likely general**.
+Let's speculate on the situation.
 We have devised simple (non-diffusion) ways to withhold information from our models, breaking the data into chunks that "make sense" to us, emphasizing aspects that must obviously be learned sooner or later.
-And when we train models to generate that withheld information, these simple approaches turn out to be locally optimal for the sake of training as quickly as possible on humongous datasets.
+And when we train models to generate that withheld information, these simple approaches may turn out to be locally optimal for the sake of training as quickly as possible on humongous datasets.
 But when the fresh data gets scarce, when you have to train from the same sample for the $N^{\text{th}}$ time, perhaps more could be learned by considering a different viewpoint -- like a diffusion model learning to predict tokens out-of-order.
 To be clear, ultimately, it could be that the diffusion model will perform better during inference when it is used to predict tokens in order, like an autoregressive model would simply do.<d-cite key="kim2025train"></d-cite>
 But because it was *challenged* during training on out-of-order tasks, it may eventually manage to pick up some tricks that will forever evade the autoregressively-trained model.
 Bigger models have more capacity to latch on such tricks, so their crossover may come earlier.
+**If these speculations are on the right path, then we can predict this phenomenon to be general**: among different ways to learn-by-destroying, diffusion-like approaches to destruction should outperform clean/systematic ones in data-starved regimes.<d-footnote>Given enough training epochs and model capacity.</d-footnote><d-footnote>Hence the French locution opening this blogpost.</d-footnote>
 
 Depending on your perspective, this may align with Sutton's *The Bitter Lesson*:<d-cite key="sutton2019bitter"></d-cite>
 
@@ -108,7 +122,7 @@ Moreover, while diffusion may beat our vanilla information-withholding approache
 
 This takes me to the last point of this blogpost's thesis: if all incarnations of the tried-and-true "information withholding" machine learning technique can (and perhaps should) be related to diffusion, what other techniques are left?
 And could we improve upon diffusion by learning from them?
-The first answers that come to my mind are "anything that involves exploration," and "yes, probably."
+The first answers that come to my mind are "anything that involves exploration,"<d-footnote>Here by "exploration" I roughly mean "trying things": whenever "frozen accidents" could induce path dependences the details of the model's training history.</d-footnote> and "yes, probably."
 
 The archetypal technique involving exploration is Reinforcement Learning (RL).
 Whereas pure generative models solely learn from a training dataset -- striving to generate new samples from the exact same data distribution -- RL models strive for a different, "better" distribution.
@@ -124,26 +138,26 @@ and their results are great!
 
 Yet I suspect that this expectation-over-decoding-order strategy is inherently off-policy.
 Indeed, even for purely random decoding orders,<d-footnote>To be clear, I definitely believe that it would be a good idea to learn a policy for the decoding order. I'm here assuming a non-learnable random order to make my point stronger.</d-footnote> I claim that the specific order faced by the model while generating a trace should be accounted for in the reward assignment for that trace.
-My intuition goes as follows: if a successful reasoning trace summarizes some premises from the context, expands some methodic steps, then reaches some conclusion, what are we teaching the model by rewarding it to predict the conclusion first, without the reasoning steps that lead to it?<d-footnote>My answer: at best we're teaching it to skip steps and/or ignore reasoning, at worst we're teaching it to hallucinate, make stuff up, justify *a posteriori* and/or otherwise deceive.</d-footnote>
+My intuition goes as follows: if a successful reasoning trace summarizes some premises from the context, expands some methodic steps, then reaches some conclusion, what are we teaching the model by rewarding it to predict the conclusion first, without the reasoning steps that lead to it?<d-footnote>My personal guess, derived from intuition alone: at best we're teaching it to skip steps and/or ignore reasoning, at worst we're teaching it to hallucinate, make stuff up, justify *a posteriori* and/or otherwise deceive.</d-footnote>
 
 You may now think "Who are you to say how the model should or shouldn't reason! Remember The Bitter Lesson!"
 Fair enough, but here's my point: in the non-RL diffusion case, this expectation-over-decoding-order approach was grounded in sound theory, but we didn't do our homework before porting it to RL.
 We can justify it by its good empirical results, but we lost our theoretical grounding.
-*A priori*, the only path we may reward on-policy for a given generated sample is the one that was followed by the model while generating that sample.
+*A priori*, the only path we may reward on-policy for a given generated sample is the one that was followed by the model while generating that sample.<d-footnote>In the end, the extent to which this "off-policy-ordering" matters (if at all) is a question to be resolved empirically. This implies biting the bullet and doing GRPO with a forward pass for each token in a trace (for both the original model and RLed one, to get ratios), and compare how test performances vary when using the same order as when the trace was generated, versus a new random one. Different downstream tasks may behave differently, and adding structure to the random decoding order (e.g., block decoding) may also affect the outcome.</d-footnote>
 
-Ok, how did we get that theoretical grounding in the non-RL case?
+Ok, then how did we get that theoretical grounding in the non-RL case?
 Limiting ourselves to my strict definition at the beginning of this blogpost, we consider a specific data distribution and noising process, and there thus exists a single, ideal, typically untractable<d-footnote>This is why we have to train a neural network: we're learning a tractable function that approximates the untractable ideal one.</d-footnote> probability distribution for partially-destroyed data samples at different levels of destruction.
 Within a given modeling paradigm, all concrete diffusion model implementations seek to approximate some function of that same ideal distribution: models with different weight initialization (or even different neural network architectures!) all strive to approximate the same "correct" answer.
-This is a very convenient property: in a diffusion model (as per my definition), the function to be learned is not a moving target.
+**This is a very convenient property**: in a diffusion model (as per my definition), the function to be learned is not a moving target.<d-footnote>For example, some models learn the score function (also know as "informant"), which approximates the gradient of the log of the aforementioned ideal probability distribution. Other models approximate the expected Gaussian noise that was added to a noisy sample, or a probability distribution over the original clean sample: these are also deterministic (but untractable) functions of the ideal probability distribution.</d-footnote>
 
 Can we approach the RL problem with a diffusion model that satisfies this strict definition?
 Yes!
 By reframing it as conditioning,<d-cite key="yuan2023reward"></d-cite> which is the sole allowed control mechanism as per my definition.
-For now, work on that front is still in an early stage, and competition leveraging techniques ported from the autoregressive case (e.g., GRPO) have an head start.
+For now, concrete work on that front is still in an early stage, and competing approaches leveraging techniques ported from the autoregressive case (e.g., GRPO) have an head start.
 Moreover, there is no guarantee that approaching RL by sticking to my strict definition of diffusion has real advantages in the long run.
 Nonetheless, I think that the fact we *can* suffices to justify additional exploratory efforts.
 
-More generally, notice how reframing as a conditioning problem removed "exploration" from the picture: we're not *searching* for high-reward samples, we're just *filtering out* from the original data distribution the samples that have low reward.
+More generally, notice how reframing as a conditioning problem removed "exploration" from the picture: we're not *searching* for high-reward samples, we're just *filtering out* from the original data distribution the samples that have low reward.<d-footnote>There is no room for "frozen accidents" nor any kind of path dependence. Together, the data distribution and the reward function fully specify the ideal function which the model should strive to approximate.</d-footnote>
 In practice, because we don't have infinite resources, actual implementations still have to explore to find where it is worth it to learn the function.
 We have the guaranteed existence of a non-moving target function, but we have to find which parts of that target function are worth learning well.<d-footnote>Recall that "standard" RL models are often constrained to not meander too far away from the original data distribution. Concretely, this is usually implemented by comparing the predictions of a frozen, "old" model with those of its RLed counterpart. In the conditioned diffusion approach to RL, the non-moving target function plays the role of that old model.</d-footnote>
 
@@ -152,12 +166,13 @@ Again, there are workarounds: we may tweak how we sample the destruction process
 But is there a point where we could gain something by giving up that nice, non-moving target?
 
 Of course!
-We move that target every time a researcher comes up with a "better" destroying process, and there is no good reason to believe that this human-in-the-loop algorithm has already found the optimum.
+For a start, we effectively move that target every time a researcher comes up with a different destroying process, and there is no good reason to believe that this human-in-the-loop algorithm has already found the optimum.
+We should *learn* the destroying process!
 The data should speak for itself!
 The compute should be leveraged!
-Umh, how?
+Umh, right... but how?
 
-Let me greatly simplify the problem.
+Let me start building toward an eventual solution path by formulating a version of this learn-the-destroying-process problem more explicitly.
 
 1. **First distribution.** We have a data distribution from which we can get a training dataset.
 
@@ -165,19 +180,24 @@ Let me greatly simplify the problem.
 
 3. **Cost function.** For given parameters of the destroying process, we train a diffusion model to generate from the data distribution. We are given a function that associates a cost to these parameters: the cost may depend on the ultimate performances of the model when transporting from the fully-destroyed distribution to the data distribution, but also on the model's size and the resources it consumed at training and/or inference. We seek to minimize the expectation of this cost.
 
-This is an instance of Optimal Transport (OT) problems, which are traditionally introduced with piles of dirt.
+In the special case where the "destroying process" is constrained to be a bijection (so it does not destroy information, it is just a reversible mangling<d-footnote>Actually, it can be understood as an optimal compression for communicating samples from the first distribution through a channel that has been optimized for the second distribution.</d-footnote>) and the cost function may only depend "mathematically" on the bijection's parameters (*i.e.*, there are no explicit dependencies on model performances and other implementation details), this is known as an Optimal Transport (OT) problem, which are traditionally introduced with piles of dirt.
+
 Imagine a pile of dirt whose height profile represents a probability distribution (higher probability means more dirt piled up there).
 We want to move the dirt around so that it represents a second distribution instead.
 There are many ways to do so, many exact plans for where to pick each shovelful of dirt and where to toss them.
 We can assign a cost<d-footnote>That is, a negative reward.</d-footnote> to each such plan, and we must explore the space of plans to find the cheapest.<d-footnote>If you have ever found yourself sitting in a conference room while the speaker said "... Wasserstein metric, also known as earth mover's distance...", then the talk was likely about OT.</d-footnote>
 
-Ok, but is there anything practical to gain by framing the search for the best destroying process in terms of an OT problem?
+Now the requirement that no information is destroyed amounts to demanding a plan that is perfectly specified, perfectly invertible, and perfectly executed on, down to the very grain of sand.
+In the more general case where the destroying process may actually destroy information, we have an *entropy-regularized* OT problem<d-cite key="debortoli2021diffusion"></d-cite>.<d-footnote>If the same conference speaker mentioned "Schrödinger bridges", then the talk was likely about entropy-regularized OT.</d-footnote>
+This regularization favors plans that can account for some "splatting" when a shovelful is tossed: tighter splats incur higher penalty.<d-footnote>The word "splat" should here summon the image of uncontrolled/messy dirt tumbling. There is no way to perfectly "unsplat" a shovelful: information is destroyed.</d-footnote>
+
+Back to the point, our learn-the-destroying-process problem can thus be connected to entropy-regularized OT if we allow the cost function to depend on implementation-specific metrics during training and/or inference (*e.g.*, model performances and resource consumption).
+Is there anything practical to gain by framing the search for the best destroying process in such terms?
 Well, I don't know.
-But perhaps I should now mention that entropy-regularized OT is tightly related to diffusion,<d-cite key="debortoli2021diffusion"></d-cite> a fact that definitely weights in my intuition that there may be something interesting to be done here.
 Again, I think that the fact we *can* suffices to justify some exploratory efforts.
 
 So destruction is a general strategy for learning to generate information about a data distribution, diffusion's ~~messiness~~ richness may advantageously leverage destruction in some contexts (including data-starved ones), exploring how to optimize a function doesn't neatly fit this pictures, but there are workarounds reconciliating diffusion and exploration, opening a multitude of avenues for future work.
-There are no promises, but we should give it a try.
+There are no promises, but I think that we should give it a try.
 
 
 # The Tutorial
